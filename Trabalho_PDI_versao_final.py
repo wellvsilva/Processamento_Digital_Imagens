@@ -21,6 +21,7 @@ class ProcessadorImagens:
         self.original_image = None  
         self.image_path = ""
         self.var_ajustada = IntVar(value=0)  
+
         
         # Botão para desfazer a última ação
         self.botao_desfazer = Button(self.janela, text="Desfazer", command=self.desfazer)
@@ -29,6 +30,7 @@ class ProcessadorImagens:
         # Botão para sair da aplicação
         self.botao_sair = Button(self.janela, text="Sair", command=self.sair)
         self.botao_sair.pack(side=BOTTOM)
+
 
         # Criação do menu da janela
         menu = Menu(self.janela)
@@ -43,6 +45,10 @@ class ProcessadorImagens:
         # Criação do canvas para exibir a imagem
         self.canvas = Canvas(self.janela, bg='gray')
         self.canvas.pack(fill='both', expand=True)
+
+        # Criar um rótulo para exibir o template
+        self.label_template = ttk.Label(self.janela)
+        self.label_template.pack(side=LEFT)
         
         # Menu "Processamento" com as opções de processamento de imagens
         imagem_menu = Menu(menu)
@@ -83,6 +89,7 @@ class ProcessadorImagens:
         imagem3_menu.add_command(label="Segmentação por Crescimento de Regiões", command=self.segmentacao_crescimento_regioes)
         imagem3_menu.add_command(label="Algoritmo código da cadeia", command=self.codigo_da_cadeia)
         imagem3_menu.add_command(label="Esqueletizaçao", command=self.esqueletizacao)
+        imagem3_menu.add_checkbutton(label='Casamento por correlação', command=self.casamento_por_correlacao)
         
         
         # Configuração da ação ao fechar a janela
@@ -97,7 +104,7 @@ class ProcessadorImagens:
             self.original_image = self.image.copy()
             self.image_path = file_path
             self.show_imagem()
-
+        
     
     def show_imagem(self):
         if self.image:
@@ -112,7 +119,7 @@ class ProcessadorImagens:
                                                            filetypes=[("Imagens", "*.png;*.jpg;*.jpeg; *.bmp;*.gif")])
             if file_path:
                 self.image.save(file_path)
-
+    
     
     def converte_escala_cinza(self):
         if self.image:
@@ -643,16 +650,16 @@ class ProcessadorImagens:
             gray_image = self.image.convert('L')
             np_image = np.array(gray_image)
 
-            # Etapa 1: Aplicar filtro gaussiano para redução de ruído
+            # Aplicar filtro gaussiano para redução de ruído
             blurred_image = cv2.GaussianBlur(np_image, (5, 5), 0)
 
-            # Etapa 2: Calcular magnitude do gradiente e ângulos das imagens usando Sobel
+            # Calcular magnitude do gradiente e ângulos das imagens usando Sobel
             gradient_x = cv2.Sobel(blurred_image, cv2.CV_64F, 1, 0, ksize=3)
             gradient_y = cv2.Sobel(blurred_image, cv2.CV_64F, 0, 1, ksize=3)
             gradient_magnitude = np.sqrt(gradient_x ** 2 + gradient_y ** 2)
             gradient_angles = np.arctan2(gradient_y, gradient_x)
 
-            # Etapa 3: Aplicar supressão não máxima
+            # Aplicar supressão não máxima
             suppressed_image = np.zeros_like(gradient_magnitude)
             for i in range(1, gradient_magnitude.shape[0] - 1):
                 for j in range(1, gradient_magnitude.shape[1] - 1):
@@ -675,7 +682,7 @@ class ProcessadorImagens:
                                 gradient_magnitude[i, j] >= gradient_magnitude[i - 1, j + 1]):
                             suppressed_image[i, j] = gradient_magnitude[i, j]
 
-            # Etapa 4: Limiarização por histerese e análise de conectividade
+            # Limiarização por histerese e análise de conectividade
             threshold_low = 50
             threshold_high = 150
             edges = np.zeros_like(suppressed_image)
@@ -816,7 +823,36 @@ class ProcessadorImagens:
             # Aguarda até que a janela seja fechada pelo usuário
             while plt.get_fignums():  
                 self.janela.update()
-            
+
+    def casamento_por_correlacao(self):
+        if self.image:
+            gray_image = self.image.convert('L')
+            np_image = np.array(gray_image)
+
+            # Carregue o template
+            template_path = filedialog.askopenfilename()
+            if not template_path:
+                return
+
+            template = Image.open(template_path).convert('L')
+            np_template = np.array(template)
+
+            # Realize o casamento por correlação
+            correlation_result = cv2.matchTemplate(np_image, np_template, cv2.TM_CCOEFF_NORMED)
+
+            plt.subplot(1, 2, 1)
+            plt.imshow(np_image, cmap='gray')
+            plt.title('Imagem original')
+            plt.axis('off')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(correlation_result, cmap='gray')
+            plt.title('Resultado de Correlação')
+            plt.axis('off')
+
+            plt.show()
+
+                
     def mainloop(self):
         self.janela.mainloop()
 
