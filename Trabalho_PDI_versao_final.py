@@ -640,18 +640,71 @@ class ProcessadorImagens:
     
     def deteccao_bordas_canny(self):
         if self.image:
-            if self.image.mode == "L":
-                # A imagem já está em escala de cinza, não é necessário converter
-                np_image = np.array(self.image)
-            else:
-                # Converte a imagem para escala de cinza antes de aplicar o Canny
-                gray_image = self.image.convert('L')
-                np_image = np.array(gray_image)
-            
-            bordas = cv2.Canny(np_image, 30, 150)  # Parâmetros: limiar mínimo, limiar máximo
-            bordas_pil = Image.fromarray(bordas)
-            self.image = bordas_pil
-            self.show_imagem()
+            gray_image = self.image.convert('L')
+            np_image = np.array(gray_image)
+
+            # Etapa 1: Aplicar filtro gaussiano para redução de ruído
+            blurred_image = cv2.GaussianBlur(np_image, (5, 5), 0)
+
+            # Etapa 2: Calcular magnitude do gradiente e ângulos das imagens usando Sobel
+            gradient_x = cv2.Sobel(blurred_image, cv2.CV_64F, 1, 0, ksize=3)
+            gradient_y = cv2.Sobel(blurred_image, cv2.CV_64F, 0, 1, ksize=3)
+            gradient_magnitude = np.sqrt(gradient_x ** 2 + gradient_y ** 2)
+            gradient_angles = np.arctan2(gradient_y, gradient_x)
+
+            # Etapa 3: Aplicar supressão não máxima
+            suppressed_image = np.zeros_like(gradient_magnitude)
+            for i in range(1, gradient_magnitude.shape[0] - 1):
+                for j in range(1, gradient_magnitude.shape[1] - 1):
+                    angle = gradient_angles[i, j] * 180 / np.pi
+                    if (0 <= angle < 22.5) or (157.5 <= angle <= 180) or (-22.5 <= angle < 0) or (
+                            -180 <= angle < -157.5):
+                        if (gradient_magnitude[i, j] >= gradient_magnitude[i, j + 1]) and (
+                                gradient_magnitude[i, j] >= gradient_magnitude[i, j - 1]):
+                            suppressed_image[i, j] = gradient_magnitude[i, j]
+                    elif (22.5 <= angle < 67.5) or (-157.5 <= angle < -112.5):
+                        if (gradient_magnitude[i, j] >= gradient_magnitude[i + 1, j + 1]) and (
+                                gradient_magnitude[i, j] >= gradient_magnitude[i - 1, j - 1]):
+                            suppressed_image[i, j] = gradient_magnitude[i, j]
+                    elif (67.5 <= angle < 112.5) or (-112.5 <= angle < -67.5):
+                        if (gradient_magnitude[i, j] >= gradient_magnitude[i + 1, j]) and (
+                                gradient_magnitude[i, j] >= gradient_magnitude[i - 1, j]):
+                            suppressed_image[i, j] = gradient_magnitude[i, j]
+                    else:
+                        if (gradient_magnitude[i, j] >= gradient_magnitude[i + 1, j - 1]) and (
+                                gradient_magnitude[i, j] >= gradient_magnitude[i - 1, j + 1]):
+                            suppressed_image[i, j] = gradient_magnitude[i, j]
+
+            # Etapa 4: Limiarização por histerese e análise de conectividade
+            threshold_low = 50
+            threshold_high = 150
+            edges = np.zeros_like(suppressed_image)
+            strong_edge_pixels = suppressed_image >= threshold_high
+            edges[strong_edge_pixels] = 255
+            weak_edge_pixels = (suppressed_image >= threshold_low) & (suppressed_image < threshold_high)
+            for i in range(1, edges.shape[0] - 1):
+                for j in range(1, edges.shape[1] - 1):
+                    if weak_edge_pixels[i, j]:
+                        if (edges[i + 1, j] == 255) or (edges[i - 1, j] == 255) or (edges[i, j + 1] == 255) or (
+                                edges[i, j - 1] == 255) or (edges[i + 1, j + 1] == 255) or (
+                                edges[i - 1, j - 1] == 255) or (edges[i + 1, j - 1] == 255) or (
+                                edges[i - 1, j + 1] == 255):
+                            edges[i, j] = 255
+
+            # Converter imagem de bordas de volta para imagem PIL
+            edges_image = Image.fromarray(edges.astype(np.uint8))
+
+            plt.subplot(1, 2, 1)
+            plt.imshow(np_image, cmap='gray')
+            plt.title('Imagem original')
+            plt.axis('off')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(edges_image, cmap='gray')
+            plt.title('Bordas - Detector de Canny')
+            plt.axis('off')
+
+            plt.show()
 
     
     def segmentacao_crescimento_regioes(self):
