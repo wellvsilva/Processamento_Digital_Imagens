@@ -1,4 +1,5 @@
 from tkinter import *  
+import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox, ttk, IntVar  
 from PIL import Image, ImageTk, ImageOps, ImageFilter 
 import random 
@@ -717,41 +718,101 @@ class ProcessadorImagens:
     def segmentacao_crescimento_regioes(self):
         if self.image:
             imagem_cinza = self.image.convert('L')
-            np_imagem = np.array(imagem_cinza)
+            np_imagem = np.array(imagem_cinza, dtype=np.int32)
 
-            x_semente, y_semente = simpledialog.askinteger("Segmentação por Crescimento de Regiões",
-                                                          "Digite as coordenadas x e y da semente separadas por espaço:")
+            # Lista para armazenar as coordenadas das sementes (pontos clicados)
+            coordenadas_sementes = []
 
-            if x_semente is not None and y_semente is not None:
+            # Função para lidar com o evento de clique do mouse na imagem
+            def on_click(event, np_imagem=np_imagem):
+                nonlocal coordenadas_sementes
+                y_semente, x_semente = int(event.ydata), int(event.xdata)
+
                 # Verifica se as coordenadas da semente estão dentro dos limites da imagem
                 altura, largura = np_imagem.shape
                 if 0 <= x_semente < largura and 0 <= y_semente < altura:
-                    limiar = simpledialog.askinteger("Segmentação por Crescimento de Regiões",
-                                                     "Digite o valor do limiar de crescimento:")
+                    # Limitar a quantidade de sementes a 5
+                    if len(coordenadas_sementes) >= 5:
+                        messagebox.showinfo("Aviso", "Você atingiu o limite de 5 sementes!")
+                        return
 
-                    if limiar is not None:
-                        # Usando o algoritmo de crescimento de regiões da scikit-image
-                        segmentada = segmentation.flood(np_imagem, (y_semente, x_semente), tolerance=limiar, connectivity=1)
+                    # Adicionar as coordenadas da semente na lista
+                    coordenadas_sementes.append((y_semente, x_semente))
 
-                        # Converte a imagem segmentada para a cor preta (0) na imagem final
-                        np_imagem[segmentada] = 0
+                    # Exibir as sementes marcadas na imagem original
+                    np_imagem_colorida = color.gray2rgb(np_imagem)
+                    for y, x in coordenadas_sementes:
+                        np_imagem_colorida[y, x] = [255, 0, 0]  # Pintar a semente de vermelho (RGB)
 
-                        imagem_segmentada = Image.fromarray(np_imagem)
+                    # Atualizar a imagem no canvas
+                    img_segmentada = Image.fromarray(np_imagem_colorida)
+                    img_tk = ImageTk.PhotoImage(img_segmentada)
+                    self.canvas.create_image(0, 0, image=img_tk, anchor=NW)
+                    self.canvas.image = img_tk
 
-                        plt.subplot(1, 2, 1)
-                        plt.imshow(imagem_cinza, cmap='gray')
-                        plt.title('Imagem original')
-                        plt.axis('off')
+            # Abrir a imagem original usando o OpenCV para obter as dimensões corretas
+            img_original = cv2.imread(self.image_path)
+            altura, largura, _ = img_original.shape
 
-                        plt.subplot(1, 2, 2)
-                        plt.imshow(imagem_segmentada, cmap='gray')
-                        plt.title('Segmentação por Crescimento de Regiões')
-                        plt.axis('off')
+            # Criar a janela com a imagem original para que o usuário possa clicar nela
+            fig, ax = plt.subplots(figsize=(largura / 100, altura / 100))
+            ax.imshow(np.array(self.image), cmap='gray')
+            ax.set_title('Imagem original')
+            ax.axis('off')
+            fig.canvas.mpl_connect('button_press_event', on_click)
 
-                        plt.show()
-                else:
-                    messagebox.showerror("Erro", "Coordenadas da semente fora dos limites da imagem!")
-    
+            plt.show()
+
+            # Após os cliques do usuário, realizar a segmentação
+            if coordenadas_sementes:
+                limiar = simpledialog.askinteger("Segmentação por Crescimento de Regiões",
+                                                 "Digite o valor do limiar de crescimento:")
+                if limiar is not None:
+                    # Criar uma matriz para armazenar a segmentação
+                    segmentada = np.zeros_like(np_imagem, dtype=bool)
+
+                    # Realizar o crescimento de regiões para cada semente
+                    for y_semente, x_semente in coordenadas_sementes:
+                        stack = [(y_semente, x_semente)]
+                        while stack:
+                            y, x = stack.pop()
+
+                            # Verificar se o pixel já foi visitado
+                            if segmentada[y, x]:
+                                continue
+
+                            # Verificar se o pixel está dentro do limiar
+                            if abs(np_imagem[y, x] - np_imagem[y_semente, x_semente]) <= limiar:
+                                # Marcar o pixel como visitado
+                                segmentada[y, x] = True
+
+                                # Adicionar vizinhos na pilha para verificação posterior (vizinhança 4)
+                                neighbors = [(y + dy, x + dx) for dy, dx in [(0, 1), (1, 0), (0, -1), (-1, 0)]]
+                                for ny, nx in neighbors:
+                                    if 0 <= ny < altura and 0 <= nx < largura:
+                                        stack.append((ny, nx))
+
+                    # Converte a imagem segmentada para a cor preta (0) na imagem final
+                    np_imagem[segmentada] = 0
+
+                    # Exibir a imagem segmentada na nova janela
+                    nova_janela = Toplevel(self.janela)
+                    nova_janela.title("Segmentação por Crescimento de Regiões")
+                    img_segmentada = Image.fromarray(np_imagem)
+                    img_tk = ImageTk.PhotoImage(img_segmentada)
+
+                    # Criar um Label para exibir a imagem segmentada na nova janela
+                    label_img = Label(nova_janela, image=img_tk)
+                    label_img.pack()
+
+                    # Atualizar a referência da imagem para evitar que ela seja coletada pelo garbage collector
+                    label_img.image = img_tk
+
+            else:
+                messagebox.showerror("Erro", "Você não marcou nenhuma semente!")
+
+
+                    
     def codigo_da_cadeia(self):
         if self.image:
             gray_image = self.image.convert('L')
