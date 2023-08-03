@@ -13,6 +13,7 @@ from tkinter import Toplevel
 import huffman
 from skimage import segmentation, color, morphology
 
+
 class ProcessadorImagens:
     def __init__(self):
         # Cria uma janela para o processamento de imagens
@@ -22,8 +23,10 @@ class ProcessadorImagens:
         self.original_image = None  
         self.image_path = ""
         self.var_ajustada = IntVar(value=0)  
+        self.raio_var = IntVar()
+        self.raio_var.set(10) 
 
-        
+
         # Botão para desfazer a última ação
         self.botao_desfazer = Button(self.janela, text="Desfazer", command=self.desfazer)
         self.botao_desfazer.pack(side=TOP)
@@ -80,9 +83,6 @@ class ProcessadorImagens:
         imagenew_menu.add_command(label="Filtro da Média Alfa Cortada",command=lambda: self.filtro_media_alfa_cortada(5))
         imagenew_menu.add_command(label="Processamento Morfológico", command=self.processamento_morfologico)
         imagenew_menu.add_command(label="Codificacao_Huffman", command=self.codificacao_huffman)
-
-        self.raio_var = IntVar()
-        self.raio_var.set(10) 
 
         imagem3_menu = Menu(menu)
         menu.add_cascade(label="Processamento-parte 03", menu=imagem3_menu)
@@ -279,7 +279,6 @@ class ProcessadorImagens:
             plt.imshow(idft_image, cmap='gray')
             plt.title('IDFT')
             plt.axis('off')
-
             plt.show()
 
     def espectro_dft(self):
@@ -470,6 +469,7 @@ class ProcessadorImagens:
 
                 plt.show()
 
+
     def ruido_sal_pimenta(self):
         if self.image:
             gray_image = self.image.convert('L')
@@ -507,6 +507,7 @@ class ProcessadorImagens:
 
                 plt.show()
 
+
     def filtro_media_geometrica(self, tamanho_janela=3):
         if self.image:
             gray_image = self.image.convert('L')
@@ -539,6 +540,8 @@ class ProcessadorImagens:
             axs[1].axis('off')
 
             plt.show()
+
+            
     def filtro_media_alfa_cortada(self, tamanho_janela):
         if self.image:
             gray_image = self.image.convert('L')
@@ -609,6 +612,7 @@ class ProcessadorImagens:
 
             plt.show()
 
+
     def elemento_estruturante(self):
         tamanho = self.raio_var.get() * 2 + 1
         elemento_estruturante = np.random.randint(0, 2, size=(tamanho, tamanho), dtype=np.uint8)
@@ -650,8 +654,6 @@ class ProcessadorImagens:
         if self.image:
             gray_image = self.image.convert('L')
             np_image = np.array(gray_image)
-
-            # Aplicar filtro gaussiano para redução de ruído
             blurred_image = cv2.GaussianBlur(np_image, (5, 5), 0)
 
             # Calcular magnitude do gradiente e ângulos das imagens usando Sobel
@@ -715,6 +717,112 @@ class ProcessadorImagens:
             plt.show()
 
     
+    '''def segmentacao_crescimento_regioes(self):
+        if self.image:
+            imagem_cinza = self.image.convert('L')
+            np_imagem = np.array(imagem_cinza, dtype=np.int32)
+
+            # Lista para armazenar as coordenadas das sementes (pontos clicados)
+            coordenadas_sementes = []
+
+            # Função para lidar com o evento de clique do mouse na imagem
+            def on_click(event, np_imagem=np_imagem):
+                nonlocal coordenadas_sementes
+                y_semente, x_semente = int(event.ydata), int(event.xdata)
+
+                # Verifica se as coordenadas da semente estão dentro dos limites da imagem
+                altura, largura = np_imagem.shape
+                if 0 <= x_semente < largura and 0 <= y_semente < altura:
+                    # Adicionar as coordenadas da semente na lista
+                    coordenadas_sementes.append((y_semente, x_semente))
+
+                    # Exibir as sementes marcadas na imagem original
+                    np_imagem_colorida = color.gray2rgb(np_imagem)
+                    for y, x in coordenadas_sementes:
+                        np_imagem_colorida[y, x] = [255, 0, 0]  # Pintar a semente de vermelho (RGB)
+
+                    # Atualizar a imagem no canvas
+                    img_segmentada = Image.fromarray(np_imagem_colorida)
+                    img_tk = ImageTk.PhotoImage(img_segmentada)
+                    self.canvas.create_image(0, 0, image=img_tk, anchor=NW)
+                    self.canvas.image = img_tk
+
+            # Abrir a imagem original usando o OpenCV para obter as dimensões corretas
+            img_original = cv2.imread(self.image_path)
+            altura, largura, _ = img_original.shape
+
+            # Criar a janela com a imagem original para que o usuário possa clicar nela
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.imshow(np.array(self.image), cmap='gray')
+            ax.set_title('Imagem original')
+            ax.axis('off')
+            fig.canvas.mpl_connect('button_press_event', on_click)
+
+            plt.show()
+
+            # Após os cliques do usuário, realizar a segmentação
+            if coordenadas_sementes:
+                limiar = simpledialog.askinteger("Segmentação por Crescimento de Regiões",
+                                                 "Digite o valor do limiar de crescimento:")
+                if limiar is not None:
+                    # Criar uma matriz para armazenar a segmentação
+                    segmentada = np.zeros_like(np_imagem, dtype=bool)
+
+                    # Realizar o crescimento de regiões para cada semente
+                    for y_semente, x_semente in coordenadas_sementes:
+                        stack = [(y_semente, x_semente)]
+                        while stack:
+                            y, x = stack.pop()
+
+                            # Verificar se o pixel já foi visitado
+                            if segmentada[y, x]:
+                                continue
+
+                            # Verificar se o pixel está dentro do limiar
+                            if abs(np_imagem[y, x] - np_imagem[y_semente, x_semente]) <= limiar:
+                                # Marcar o pixel como visitado
+                                segmentada[y, x] = True
+
+                                # Adicionar vizinhos na pilha para verificação posterior (vizinhança 4)
+                                neighbors = [(y + dy, x + dx) for dy, dx in [(0, 1), (1, 0), (0, -1), (-1, 0)]]
+                                for ny, nx in neighbors:
+                                    if 0 <= ny < altura and 0 <= nx < largura:
+                                        stack.append((ny, nx))
+
+                    # Converte a imagem segmentada para a cor preta (0) na imagem final
+                    np_imagem[segmentada] = 0
+
+                    # Exibir a imagem segmentada na nova janela
+                    nova_janela = Toplevel(self.janela)
+                    nova_janela.title("Segmentação por Crescimento de Regiões")
+                    img_segmentada = Image.fromarray(np_imagem)
+                    img_tk = ImageTk.PhotoImage(img_segmentada)
+
+                    # Criar um Label para exibir a imagem segmentada na nova janela
+                    label_img = Label(nova_janela, image=img_tk)
+                    label_img.pack()
+
+                    # Atualizar a referência da imagem para evitar que ela seja coletada pelo garbage collector
+                    label_img.image = img_tk
+
+            else:
+                messagebox.showerror("Erro", "Você não marcou nenhuma semente!")
+
+
+            # Abrir a imagem original usando o OpenCV para obter as dimensões corretas
+            img_original = cv2.imread(self.image_path)
+            altura, largura, _ = img_original.shape
+
+            # Criar a janela com a imagem original para que o usuário possa clicar nela
+            fig, ax = plt.subplots(figsize=(largura / 100, altura / 100))
+            ax.imshow(np.array(self.image), cmap='gray')
+            ax.set_title('Imagem original')
+            ax.axis('off')
+            fig.canvas.mpl_connect('button_press_event', on_click)
+
+            plt.show()'''
+    
+
     def segmentacao_crescimento_regioes(self):
         if self.image:
             imagem_cinza = self.image.convert('L')
@@ -812,48 +920,25 @@ class ProcessadorImagens:
                 messagebox.showerror("Erro", "Você não marcou nenhuma semente!")
 
 
-                    
+
     def codigo_da_cadeia(self):
         if self.image:
-            gray_image = self.image.convert('L')
-            np_image = np.array(gray_image)
-            height, width = np_image.shape
+            imagem_cinza = self.image.convert('L')
+            np_imagem = np.array(imagem_cinza)
 
-            # Definir os valores dos vizinhos
-            vizinhos = [(1, 0), (1, 1), (0, 1), (-1, 1),
-                        (-1, 0), (-1, -1), (0, -1), (1, -1)]
+            # Encontrar os contornos utilizando a função findContours do OpenCV
+            contornos, _ = cv2.findContours(np_imagem, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-            # Criar uma matriz para armazenar o código da cadeia
-            codigo_cadeia = np.zeros((height, width), dtype=int)
+            # Criar uma imagem com os contornos desenhados
+            imagem_contorno = np.zeros_like(np_imagem, dtype=np.uint8)
+            cv2.drawContours(imagem_contorno, contornos, -1, 255, thickness=1)
 
-            # Encontrar o primeiro pixel com valor diferente de zero
-            start_pixel = np.argwhere(np_image != 0)[0]
-            current_pixel = tuple(start_pixel)
-            current_direction = 0
-
-            # Definir os valores do código da cadeia para cada direção
-            codigo_cadeia_direcoes = [0, 1, 2, 3, 4, 5, 6, 7]
-
-            # Gerar o código da cadeia
-            for i in range(8 * height * width):
-                x, y = current_pixel
-                next_direction = (current_direction - 1) % 8
-
-                # Verificar os vizinhos para encontrar o próximo pixel na borda
-                for j in range(8):
-                    dx, dy = vizinhos[next_direction]
-                    next_pixel = (x + dx, y + dy)
-                    if np_image[next_pixel] != 0:
-                        break
-                    next_direction = (next_direction + 1) % 8
-
-                # Calcular o valor do código da cadeia
-                codigo_cadeia[x, y] = codigo_cadeia_direcoes[next_direction]
-                current_pixel = next_pixel
-                current_direction = next_direction
-
-            # Retornar a matriz com o código da cadeia
-            return codigo_cadeia
+            # Plotar a imagem do contorno utilizando o matplotlib
+            plt.figure(figsize=(8, 8))
+            plt.imshow(imagem_contorno, cmap='gray')
+            plt.title("Código da Cadeia - Contorno")
+            plt.axis('off')
+            plt.show()
 
 
     def esqueletizacao(self):
