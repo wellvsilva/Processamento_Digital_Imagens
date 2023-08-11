@@ -46,13 +46,16 @@ class ProcessadorImagens:
         file_menu.add_command(label="Abrir", command=self.load_imagem)
         file_menu.add_command(label="Salvar", command=self.save_imagem)
 
+        
         # Criação do canvas para exibir a imagem
         self.canvas = Canvas(self.janela, bg='gray')
         self.canvas.pack(fill='both', expand=True)
 
+        
         # Criar um rótulo para exibir o template
         self.label_template = ttk.Label(self.janela)
         self.label_template.pack(side=LEFT)
+        
         
         # Menu "Processamento" com as opções de processamento de imagens
         imagem_menu = Menu(menu)
@@ -281,6 +284,7 @@ class ProcessadorImagens:
             plt.axis('off')
             plt.show()
 
+
     def espectro_dft(self):
         if self.image:
 
@@ -301,6 +305,7 @@ class ProcessadorImagens:
 
         plt.show()
 
+
     def angulo_fase(self):
         if self.image:
             gray_image = self.image.convert('L')
@@ -319,6 +324,7 @@ class ProcessadorImagens:
         plt.axis('off')
 
         plt.show()
+
 
     def filtro_passa_baixa(self):
         if self.image:
@@ -351,6 +357,7 @@ class ProcessadorImagens:
 
                 plt.show()
 
+    
     def filtro_passa_alta(self):
         if self.image:
             gray_image = self.image.convert('L')
@@ -385,6 +392,7 @@ class ProcessadorImagens:
 
                 plt.show()
 
+    
     def filtro_rejeita_notch(self):
         if self.image:
             gray_image = self.image.convert('L')
@@ -396,6 +404,7 @@ class ProcessadorImagens:
                 self.image = filtered_image
                 self.show_imagem()
 
+    
     def selecionar_centros(self, image):
         plt.imshow(image, cmap='gray')
         plt.title('Selecione os centros dos filtros')
@@ -415,6 +424,7 @@ class ProcessadorImagens:
 
         return center_positions
 
+    
     def filtro_rejeita_notch_ideal(self, image, center_positions, radius):
         np_image = np.array(image)
         dft = np.fft.fft2(np_image)
@@ -612,7 +622,6 @@ class ProcessadorImagens:
 
             plt.show()
 
-
     def elemento_estruturante(self):
         tamanho = self.raio_var.get() * 2 + 1
         elemento_estruturante = np.random.randint(0, 2, size=(tamanho, tamanho), dtype=np.uint8)
@@ -715,112 +724,6 @@ class ProcessadorImagens:
             plt.axis('off')
 
             plt.show()
-
-    
-    '''def segmentacao_crescimento_regioes(self):
-        if self.image:
-            imagem_cinza = self.image.convert('L')
-            np_imagem = np.array(imagem_cinza, dtype=np.int32)
-
-            # Lista para armazenar as coordenadas das sementes (pontos clicados)
-            coordenadas_sementes = []
-
-            # Função para lidar com o evento de clique do mouse na imagem
-            def on_click(event, np_imagem=np_imagem):
-                nonlocal coordenadas_sementes
-                y_semente, x_semente = int(event.ydata), int(event.xdata)
-
-                # Verifica se as coordenadas da semente estão dentro dos limites da imagem
-                altura, largura = np_imagem.shape
-                if 0 <= x_semente < largura and 0 <= y_semente < altura:
-                    # Adicionar as coordenadas da semente na lista
-                    coordenadas_sementes.append((y_semente, x_semente))
-
-                    # Exibir as sementes marcadas na imagem original
-                    np_imagem_colorida = color.gray2rgb(np_imagem)
-                    for y, x in coordenadas_sementes:
-                        np_imagem_colorida[y, x] = [255, 0, 0]  # Pintar a semente de vermelho (RGB)
-
-                    # Atualizar a imagem no canvas
-                    img_segmentada = Image.fromarray(np_imagem_colorida)
-                    img_tk = ImageTk.PhotoImage(img_segmentada)
-                    self.canvas.create_image(0, 0, image=img_tk, anchor=NW)
-                    self.canvas.image = img_tk
-
-            # Abrir a imagem original usando o OpenCV para obter as dimensões corretas
-            img_original = cv2.imread(self.image_path)
-            altura, largura, _ = img_original.shape
-
-            # Criar a janela com a imagem original para que o usuário possa clicar nela
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.imshow(np.array(self.image), cmap='gray')
-            ax.set_title('Imagem original')
-            ax.axis('off')
-            fig.canvas.mpl_connect('button_press_event', on_click)
-
-            plt.show()
-
-            # Após os cliques do usuário, realizar a segmentação
-            if coordenadas_sementes:
-                limiar = simpledialog.askinteger("Segmentação por Crescimento de Regiões",
-                                                 "Digite o valor do limiar de crescimento:")
-                if limiar is not None:
-                    # Criar uma matriz para armazenar a segmentação
-                    segmentada = np.zeros_like(np_imagem, dtype=bool)
-
-                    # Realizar o crescimento de regiões para cada semente
-                    for y_semente, x_semente in coordenadas_sementes:
-                        stack = [(y_semente, x_semente)]
-                        while stack:
-                            y, x = stack.pop()
-
-                            # Verificar se o pixel já foi visitado
-                            if segmentada[y, x]:
-                                continue
-
-                            # Verificar se o pixel está dentro do limiar
-                            if abs(np_imagem[y, x] - np_imagem[y_semente, x_semente]) <= limiar:
-                                # Marcar o pixel como visitado
-                                segmentada[y, x] = True
-
-                                # Adicionar vizinhos na pilha para verificação posterior (vizinhança 4)
-                                neighbors = [(y + dy, x + dx) for dy, dx in [(0, 1), (1, 0), (0, -1), (-1, 0)]]
-                                for ny, nx in neighbors:
-                                    if 0 <= ny < altura and 0 <= nx < largura:
-                                        stack.append((ny, nx))
-
-                    # Converte a imagem segmentada para a cor preta (0) na imagem final
-                    np_imagem[segmentada] = 0
-
-                    # Exibir a imagem segmentada na nova janela
-                    nova_janela = Toplevel(self.janela)
-                    nova_janela.title("Segmentação por Crescimento de Regiões")
-                    img_segmentada = Image.fromarray(np_imagem)
-                    img_tk = ImageTk.PhotoImage(img_segmentada)
-
-                    # Criar um Label para exibir a imagem segmentada na nova janela
-                    label_img = Label(nova_janela, image=img_tk)
-                    label_img.pack()
-
-                    # Atualizar a referência da imagem para evitar que ela seja coletada pelo garbage collector
-                    label_img.image = img_tk
-
-            else:
-                messagebox.showerror("Erro", "Você não marcou nenhuma semente!")
-
-
-            # Abrir a imagem original usando o OpenCV para obter as dimensões corretas
-            img_original = cv2.imread(self.image_path)
-            altura, largura, _ = img_original.shape
-
-            # Criar a janela com a imagem original para que o usuário possa clicar nela
-            fig, ax = plt.subplots(figsize=(largura / 100, altura / 100))
-            ax.imshow(np.array(self.image), cmap='gray')
-            ax.set_title('Imagem original')
-            ax.axis('off')
-            fig.canvas.mpl_connect('button_press_event', on_click)
-
-            plt.show()'''
     
 
     def segmentacao_crescimento_regioes(self):
@@ -920,26 +823,82 @@ class ProcessadorImagens:
                 messagebox.showerror("Erro", "Você não marcou nenhuma semente!")
 
 
-
     def codigo_da_cadeia(self):
-        if self.image:
-            imagem_cinza = self.image.convert('L')
-            np_imagem = np.array(imagem_cinza)
+        if self.image is not None:
+            # Converter a imagem para escala de cinza
+            gray_image = self.image.convert('L')
+            
+            # Converte a imagem para uma matriz Numpy
+            gray_image_np = np.array(gray_image)
+            
+            # Binarizar a imagem (se necessário)
+            _, binary_image = cv2.threshold(gray_image_np, 128, 255, cv2.THRESH_BINARY)
+            
+            # Encontrar os contornos
+            contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if len(contours) == 0:
+                messagebox.showerror("Erro", "Nenhum contorno encontrado!")
+                return
+            
+            contour = contours[0]
+            chain_code = []
 
-            # Encontrar os contornos utilizando a função findContours do OpenCV
-            contornos, _ = cv2.findContours(np_imagem, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            for i in range(1, len(contour)):
+                dx = contour[i][0][0] - contour[i - 1][0][0]
+                dy = contour[i][0][1] - contour[i - 1][0][1]
 
-            # Criar uma imagem com os contornos desenhados
-            imagem_contorno = np.zeros_like(np_imagem, dtype=np.uint8)
-            cv2.drawContours(imagem_contorno, contornos, -1, 255, thickness=1)
+                if dx == 1 and dy == 0:
+                    code = 0
+                elif dx == 1 and dy == 1:
+                    code = 1
+                elif dx == 0 and dy == 1:
+                    code = 2
+                elif dx == -1 and dy == 1:
+                    code = 3
+                elif dx == -1 and dy == 0:
+                    code = 4
+                elif dx == -1 and dy == -1:
+                    code = 5
+                elif dx == 0 and dy == -1:
+                    code = 6
+                elif dx == 1 and dy == -1:
+                    code = 7
+                else:
+                    code = -1  # Invalid code
 
-            # Plotar a imagem do contorno utilizando o matplotlib
-            plt.figure(figsize=(8, 8))
-            plt.imshow(imagem_contorno, cmap='gray')
-            plt.title("Código da Cadeia - Contorno")
-            plt.axis('off')
-            plt.show()
+                if code != -1:
+                    chain_code.append(code)
 
+            min_magnitude = self.calculate_magnitude_minima(chain_code)
+            first_difference = self.calculate_first_difference(chain_code)
+
+            self.show_results(chain_code, min_magnitude, first_difference)
+        else:
+            messagebox.showerror("Erro", "Nenhuma imagem carregada!")
+
+    def calculate_magnitude_minima(self, chain_code):
+        min_magnitude_sequence = chain_code
+        for i in range(len(chain_code)):
+            rotated_sequence = chain_code[i:] + chain_code[:i]
+            if rotated_sequence < min_magnitude_sequence:
+                min_magnitude_sequence = rotated_sequence
+
+        return min_magnitude_sequence
+
+    def calculate_first_difference(self, chain_code):
+        first_difference = []
+
+        for i in range(len(chain_code) - 1):
+            diff = (chain_code[i + 1] - chain_code[i]) % 8
+            first_difference.append(diff)
+
+        return first_difference
+
+    def show_results(self, chain_code, min_magnitude, first_difference):
+        result_text = f"Código da Cadeia de Freeman: {chain_code}\nMagnitude Mínima: {min_magnitude}\nPrimeira Diferença: {first_difference}"
+        messagebox.showinfo("Resultados", result_text)
+    
 
     def esqueletizacao(self):
         if self.image:
@@ -969,6 +928,7 @@ class ProcessadorImagens:
             # Aguarda até que a janela seja fechada pelo usuário
             while plt.get_fignums():  
                 self.janela.update()
+
 
     def casamento_por_correlacao(self):
         if self.image:
